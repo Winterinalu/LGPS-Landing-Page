@@ -11,9 +11,9 @@ function App() {
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
-    // Simulate checking the email confirmation token
+    // Function to handle the email confirmation process
     const confirmEmail = async () => {
-      // Example: get token from URL query params
+      // 1. Get token from URL query params (e.g., from ?token=HASH)
       const params = new URLSearchParams(window.location.search);
       const token = params.get('token');
 
@@ -22,10 +22,16 @@ function App() {
         return;
       }
 
-      const { data, error } = await supabase.auth.verifyOtp({ token, type: 'signup' });
+      // 2. Call Supabase to verify the token for signup
+      // This is the core logic you wanted to ensure was included.
+      const { error } = await supabase.auth.verifyOtp({ 
+        token, 
+        type: 'signup' // Use 'signup' type for email confirmation
+      });
 
       if (error) {
         setStatus('error');
+        // Optional: You could log the error here for debugging: console.error(error);
       } else {
         setStatus('success');
       }
