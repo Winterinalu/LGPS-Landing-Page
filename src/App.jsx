@@ -8,31 +8,35 @@ const supabase = createClient(
 );
 
 function App() {
+  // Status tracks the confirmation process state
   const [status, setStatus] = useState('loading');
-  const [isConfirmed, setIsConfirmed] = useState(false);
 
   useEffect(() => {
-    // This function runs on every page load to check for a session
-    // that Supabase might have injected into the URL fragment (#...) 
-    // after the ConfirmationURL redirect.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // The 'SIGNED_IN' event fires after a successful login or confirmation redirect
+    // This listener watches for state changes, which occurs when 
+    // Supabase reads the session tokens from the URL fragment (#...) 
+    // after the email confirmation redirect.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      
+      // The SIGNED_IN event means a new session was just established, 
+      // likely from the email confirmation redirect URL.
       if (event === 'SIGNED_IN' && session) {
-        // If we successfully get a session, it means the user was confirmed and logged in.
-        setIsConfirmed(true); 
+        
+        // 1. We know the email is confirmed because they are now signed in.
         setStatus('success');
-      } else if (event === 'INITIAL_SESSION' && session) {
-        // Handle cases where the user is already logged in on initial load, 
-        // though typically not what we want for a confirmation page.
-        setIsConfirmed(true); 
-        setStatus('success');
-      } else {
-        // Check if there is no session and no hash data (meaning no redirect happened)
-        // Note: Checking for the specific hash data is complex, so we simplify 
-        // by looking at the session and assuming if it's not success, it might be an issue.
-        if (event === 'INITIAL_SESSION' && !session) {
-           setStatus('no-session');
+        
+        // 2. CRITICAL STEP: IMMEDIATELY SIGN THEM OUT
+        // This clears the session and prevents the JWT from being saved 
+        // in local storage, fulfilling your requirement.
+        const { error: signOutError } = await supabase.auth.signOut();
+        
+        if (signOutError) {
+          console.error("Error clearing session after confirmation:", signOutError);
         }
+        
+      } else if (event === 'INITIAL_SESSION') {
+        // If the initial check is complete and no new session was detected,
+        // we can assume the user wasn't just redirected from the confirmation link.
+        setStatus('no-confirmation-detected');
       }
     });
 
@@ -43,15 +47,15 @@ function App() {
   const renderMessage = () => {
     switch (status) {
       case 'loading':
-        // Wait for the onAuthStateChange listener to process the URL fragment
-        return 'Checking confirmation status...'; 
+        // Show while the listener is waiting for the URL fragment to be processed
+        return 'Checking email confirmation status...'; 
       case 'success':
-        return 'Your email has been successfully confirmed! Welcome to LGPS.';
-      case 'no-session':
-        // This is a default message if no token or session was found.
-        return 'Please check your email link or try signing in.';
+        // This message is shown right after the session has been created AND destroyed.
+        return 'Your email has been successfully confirmed! You may now return to the app and sign in.';
+      case 'no-confirmation-detected':
+        // Fallback for a regular user landing on the page
+        return 'Welcome! If you are looking to sign up, please do so.';
       default:
-        // You might want to remove the default case or make it a fallback message
         return '';
     }
   };
