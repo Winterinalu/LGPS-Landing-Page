@@ -9,48 +9,49 @@ const supabase = createClient(
 
 function App() {
   const [status, setStatus] = useState('loading');
+  const [isConfirmed, setIsConfirmed] = useState(false);
 
   useEffect(() => {
-    // Function to handle the email confirmation process
-    const confirmEmail = async () => {
-      // 1. Get token from URL query params (e.g., from ?token=HASH)
-      const params = new URLSearchParams(window.location.search);
-      const token = params.get('token');
-
-      if (!token) {
-        setStatus('no-token');
-        return;
-      }
-
-      // 2. Call Supabase to verify the token for signup
-      // This is the core logic you wanted to ensure was included.
-      const { error } = await supabase.auth.verifyOtp({ 
-        token, 
-        type: 'signup' // Use 'signup' type for email confirmation
-      });
-
-      if (error) {
-        setStatus('error');
-        // Optional: You could log the error here for debugging: console.error(error);
-      } else {
+    // This function runs on every page load to check for a session
+    // that Supabase might have injected into the URL fragment (#...) 
+    // after the ConfirmationURL redirect.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // The 'SIGNED_IN' event fires after a successful login or confirmation redirect
+      if (event === 'SIGNED_IN' && session) {
+        // If we successfully get a session, it means the user was confirmed and logged in.
+        setIsConfirmed(true); 
         setStatus('success');
+      } else if (event === 'INITIAL_SESSION' && session) {
+        // Handle cases where the user is already logged in on initial load, 
+        // though typically not what we want for a confirmation page.
+        setIsConfirmed(true); 
+        setStatus('success');
+      } else {
+        // Check if there is no session and no hash data (meaning no redirect happened)
+        // Note: Checking for the specific hash data is complex, so we simplify 
+        // by looking at the session and assuming if it's not success, it might be an issue.
+        if (event === 'INITIAL_SESSION' && !session) {
+           setStatus('no-session');
+        }
       }
-    };
+    });
 
-    confirmEmail();
+    // Clean up the subscription when the component unmounts
+    return () => subscription.unsubscribe();
   }, []);
 
   const renderMessage = () => {
     switch (status) {
       case 'loading':
-        return 'Confirming your email...';
+        // Wait for the onAuthStateChange listener to process the URL fragment
+        return 'Checking confirmation status...'; 
       case 'success':
         return 'Your email has been successfully confirmed! Welcome to LGPS.';
-      case 'error':
-        return 'There was an error confirming your email. Please try again.';
-      case 'no-token':
-        return 'No confirmation token found. Please check your email link.';
+      case 'no-session':
+        // This is a default message if no token or session was found.
+        return 'Please check your email link or try signing in.';
       default:
+        // You might want to remove the default case or make it a fallback message
         return '';
     }
   };
