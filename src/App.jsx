@@ -8,53 +8,55 @@ const supabase = createClient(
 );
 
 function App() {
-  // Status tracks the confirmation process state
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
-    // This listener watches for state changes, which occurs when 
-    // Supabase reads the session tokens from the URL fragment (#...) 
-    // after the email confirmation redirect.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      
-      // The SIGNED_IN event means a new session was just established, 
-      // likely from the email confirmation redirect URL.
-      if (event === 'SIGNED_IN' && session) {
-        
-        // 1. We know the email is confirmed because they are now signed in.
-        setStatus('success');
-        
-        // 2. CRITICAL STEP: IMMEDIATELY SIGN THEM OUT
-        // This clears the session and prevents the JWT from being saved 
-        // in local storage, fulfilling your requirement.
-        const { error: signOutError } = await supabase.auth.signOut();
-        
-        if (signOutError) {
-          console.error("Error clearing session after confirmation:", signOutError);
+    // Extract access_token etc. from the confirmURL fragment
+    const hash = window.location.hash.substring(1);
+    const params = new URLSearchParams(hash);
+    const access_token = params.get('access_token');
+    const refresh_token = params.get('refresh_token');
+
+    const confirmFromUrl = async () => {
+      if (access_token && refresh_token) {
+        // Exchange tokens for a session and confirm the email
+        const { data, error } = await supabase.auth.setSession({
+          access_token,
+          refresh_token
+        });
+
+        if (error) {
+          console.error('Error confirming email:', error);
+          setStatus('error');
+          return;
         }
-        
-      } else if (event === 'INITIAL_SESSION') {
-        // If the initial check is complete and no new session was detected,
-        // we can assume the user wasn't just redirected from the confirmation link.
+
+        // Successful sign-in after confirmation
+        setStatus('success');
+
+        // Immediately clear the session so user stays logged out
+        const { error: signOutError } = await supabase.auth.signOut();
+        if (signOutError) {
+          console.error('Error clearing session after confirmation:', signOutError);
+        }
+      } else {
         setStatus('no-confirmation-detected');
       }
-    });
+    };
 
-    // Clean up the subscription when the component unmounts
-    return () => subscription.unsubscribe();
+    confirmFromUrl();
   }, []);
 
   const renderMessage = () => {
     switch (status) {
       case 'loading':
-        // Show while the listener is waiting for the URL fragment to be processed
-        return 'Checking email confirmation status...'; 
+        return 'Checking email confirmation status...';
       case 'success':
-        // This message is shown right after the session has been created AND destroyed.
         return 'Your email has been successfully confirmed! You may now return to the app and sign in.';
       case 'no-confirmation-detected':
-        // Fallback for a regular user landing on the page
-        return 'Welcome! If you are looking to sign up, please do so.';
+        return 'No confirmation data detected. Please use the email link to confirm your account.';
+      case 'error':
+        return 'An error occurred while confirming your email. Please try again or contact support.';
       default:
         return '';
     }
