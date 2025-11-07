@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import './App.css';
+import logo from './Images/LP Logo Transparent.png';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -11,7 +12,7 @@ function App() {
   const [status, setStatus] = useState('loading');
 
   useEffect(() => {
-    // Extract access_token etc. from the confirmURL fragment
+    // Read tokens from the URL fragment that Supabase appends to the confirmation link
     const hash = window.location.hash.substring(1);
     const params = new URLSearchParams(hash);
     const access_token = params.get('access_token');
@@ -19,7 +20,6 @@ function App() {
 
     const confirmFromUrl = async () => {
       if (access_token && refresh_token) {
-        // Exchange tokens for a session and confirm the email
         const { data, error } = await supabase.auth.setSession({
           access_token,
           refresh_token
@@ -31,14 +31,12 @@ function App() {
           return;
         }
 
-        // Successful sign-in after confirmation
+        // show success briefly
         setStatus('success');
 
-        // Immediately clear the session so user stays logged out
+        // Immediately clear the session so the user remains logged out
         const { error: signOutError } = await supabase.auth.signOut();
-        if (signOutError) {
-          console.error('Error clearing session after confirmation:', signOutError);
-        }
+        if (signOutError) console.error('Error clearing session after confirmation:', signOutError);
       } else {
         setStatus('no-confirmation-detected');
       }
@@ -52,22 +50,31 @@ function App() {
       case 'loading':
         return 'Checking email confirmation status...';
       case 'success':
-        return 'Your email has been successfully confirmed! You may now return to the app and sign in.';
+        return 'Your email has been successfully confirmed. You may now sign in.';
       case 'no-confirmation-detected':
-        return 'No confirmation data detected. Please use the email link to confirm your account.';
+        return 'No confirmation data detected. Please use the link sent to your email.';
       case 'error':
-        return 'An error occurred while confirming your email. Please try again or contact support.';
+        return 'There was a problem confirming your email. Please try again or contact support.';
       default:
         return '';
     }
   };
 
   return (
-    <div className="landing-container">
-      <div className="logo">LGPS</div>
-      <h1>Lugaw Pilipinas</h1>
-      <div className="confirmation-card">
-        <p>{renderMessage()}</p>
+    <div className="confirm-root">
+      <div className="confirm-center">
+        <div className="confirm-card">
+          <div className="confirm-top">
+            <img src={logo} alt="LGPS logo" className="logo" />
+            <h2>Confirm your signup</h2>
+          </div>
+
+          <div className="confirm-body">
+            <div className="status-dot" data-status={status}></div>
+            <p className="message">{renderMessage()}</p>
+            <small className="hint">If you did not request this, you can ignore this message.</small>
+          </div>
+        </div>
       </div>
     </div>
   );
